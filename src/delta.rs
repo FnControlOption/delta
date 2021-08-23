@@ -26,6 +26,7 @@ pub enum State {
     HunkPlus(Option<String>), // In hunk; added line (raw_line)
     SubmoduleLog, // In a submodule section, with gitconfig diff.submodule = log
     SubmoduleShort(String), // In a submodule section, with gitconfig diff.submodule = short
+    Blame(String), // In a line of `git blame` output.
     Unknown,
 }
 
@@ -126,7 +127,8 @@ impl<'a> StateMachine<'a> {
                 || self.handle_additional_file_meta_cases()?
                 || self.handle_submodule_log_line()?
                 || self.handle_submodule_short_line()?
-                || self.handle_hunk_line()?;
+                || self.handle_hunk_line()?
+                || self.handle_blame_line()?;
 
             if self.state == State::FileMeta && self.should_handle() && !self.config.color_only {
                 // Skip file metadata lines unless a raw diff style has been requested.
@@ -461,6 +463,36 @@ impl<'a> StateMachine<'a> {
             }
         }
         Ok(true)
+    }
+
+    /// If this is a line of git blame output then render it accordingly. If
+    /// this is the first blame line, then set the syntax-highlighter language
+    /// according to delta.default-language.
+    fn handle_blame_line(&mut self) -> std::io::Result<bool> {
+        let mut handled_line = false;
+        self.painter.emit()?;
+        if matches!(self.state, State::Unknown | State::Blame(_)) {
+            if let Some(blame) = parse::parse_git_blame_line(&self.line) {
+                write!(
+                    self.painter.writer,
+                    "{:15}: {:15}: {}: ",
+                    chrono_humanize::HumanTime::from(blame.time),
+                    blame.author,
+                    self.config.commit_style.paint(blame.commit),
+                )?;
+                if matches!(self.state, State::Unknown) {
+                    if let Some(lang) = self.config.default_language.as_ref() {
+                        self.painter.set_syntax(Some(lang));
+                        self.painter.set_highlighter();
+                    }
+                    self.state = State::Blame(blame.commit.to_owned());
+                }
+                self.painter
+                    .syntax_highlight_and_paint_line(blame.code, self.state.clone());
+                handled_line = true
+            }
+        }
+        Ok(handled_line)
     }
 
     fn _handle_additional_cases(&mut self, to_state: State) -> std::io::Result<bool> {

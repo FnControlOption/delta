@@ -488,6 +488,7 @@ impl<'a> Painter<'a> {
             }
             State::HunkHeader(_, _) => true,
             State::HunkMinus(Some(_)) | State::HunkPlus(Some(_)) => false,
+            State::Blame(_) => true,
             _ => panic!(
                 "should_compute_syntax_highlighting is undefined for state {:?}",
                 state
