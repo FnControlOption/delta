@@ -21,8 +21,6 @@
 
 use std::fmt::Write as FmtWrite;
 
-use unicode_segmentation::UnicodeSegmentation;
-
 use crate::config::Config;
 use crate::delta;
 use crate::draw;
@@ -73,7 +71,7 @@ pub fn write_hunk_header(
     let file_with_line_number = get_painted_file_with_line_number(line_numbers, plus_file, config);
 
     if !line.is_empty() || !file_with_line_number.is_empty() {
-        write_to_output_buffer(&file_with_line_number, line, painter, config);
+        write_to_output_buffer(&file_with_line_number, line, painter);
         draw_fn(
             painter.writer,
             &painter.output_buffer,
@@ -130,36 +128,14 @@ fn get_painted_file_with_line_number(
     }
 }
 
-fn write_to_output_buffer(
-    file_with_line_number: &str,
-    line: String,
-    painter: &mut Painter,
-    config: &Config,
-) {
+fn write_to_output_buffer(file_with_line_number: &str, line: String, painter: &mut Painter) {
     if !file_with_line_number.is_empty() {
         let _ = write!(&mut painter.output_buffer, "{}: ", file_with_line_number);
     }
     if !line.is_empty() {
-        let lines = vec![(
-            painter.expand_tabs(line.graphemes(true)),
+        painter.syntax_highlight_and_paint_line(
+            &line,
             delta::State::HunkHeader("".to_owned(), "".to_owned()),
-        )];
-        let syntax_style_sections = Painter::get_syntax_style_sections_for_lines(
-            &lines,
-            &delta::State::HunkHeader("".to_owned(), "".to_owned()),
-            painter.highlighter.as_mut(),
-            painter.config,
-        );
-        Painter::paint_lines(
-            syntax_style_sections,
-            vec![vec![(config.hunk_header_style, &lines[0].0)]], // TODO: compute style from state
-            [delta::State::HunkHeader("".to_owned(), "".to_owned())].iter(),
-            &mut painter.output_buffer,
-            config,
-            &mut None,
-            None,
-            None,
-            Some(false),
         );
         painter.output_buffer.pop(); // trim newline
     }
