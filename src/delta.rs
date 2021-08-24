@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::Write;
 
@@ -7,6 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::ansi;
 use crate::cli;
+use crate::color;
 use crate::config::Config;
 use crate::draw;
 use crate::features;
@@ -14,7 +16,7 @@ use crate::format;
 use crate::hunk_header;
 use crate::paint::Painter;
 use crate::parse;
-use crate::style::{self, DecorationStyle};
+use crate::style::{self, DecorationStyle, Style};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -78,6 +80,7 @@ struct StateMachine<'a> {
     // avoid emitting the file meta header line twice (#245).
     current_file_pair: Option<(String, String)>,
     handled_file_meta_header_line_file_pair: Option<(String, String)>,
+    blame_commit_colors: HashMap<String, String>,
 }
 
 pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Write, config: &Config) -> std::io::Result<()>
@@ -103,6 +106,7 @@ impl<'a> StateMachine<'a> {
             handled_file_meta_header_line_file_pair: None,
             painter: Painter::new(writer, config),
             config,
+            blame_commit_colors: HashMap::new(),
         }
     }
 
@@ -473,13 +477,29 @@ impl<'a> StateMachine<'a> {
         self.painter.emit()?;
         if matches!(self.state, State::Unknown | State::Blame(_)) {
             if let Some(blame) = parse::parse_git_blame_line(&self.line) {
-                write!(
-                    self.painter.writer,
+                let color = if let Some(color) = self.blame_commit_colors.get(blame.commit) {
+                    color
+                } else {
+                    let n_commits = self.blame_commit_colors.len();
+                    let n_colors = self.config.blame_palette.as_ref().map(|v| v.len()).unwrap();
+                    let new_color = self
+                        .config
+                        .blame_palette
+                        .as_ref()
+                        .map(|v| &v[(n_commits + 1) % n_colors])
+                        .unwrap();
+                    self.blame_commit_colors
+                        .insert(blame.commit.to_owned(), new_color.to_owned());
+                    new_color
+                };
+                let metadata = format!(
                     "{:15}: {:15}: {}: ",
                     chrono_humanize::HumanTime::from(blame.time),
                     blame.author,
                     self.config.commit_style.paint(blame.commit),
-                )?;
+                );
+                let style = Style::from_colors(None, color::parse_color(color, true));
+                write!(self.painter.writer, "{}", style.paint(metadata))?;
                 if matches!(self.state, State::Unknown) {
                     if let Some(lang) = self.config.default_language.as_ref() {
                         self.painter.set_syntax(Some(lang));
@@ -488,7 +508,7 @@ impl<'a> StateMachine<'a> {
                     self.state = State::Blame(blame.commit.to_owned());
                 }
                 self.painter
-                    .syntax_highlight_and_paint_line(blame.code, self.state.clone());
+                    .syntax_highlight_and_paint_line(blame.code, style, self.state.clone());
                 handled_line = true
             }
         }

@@ -293,7 +293,7 @@ impl<'a> Painter<'a> {
 
     /// Compute syntax-highlighting and diff annotations, and write painted line
     /// to the output buffer.
-    pub fn syntax_highlight_and_paint_line(&mut self, line: &str, state: State) {
+    pub fn syntax_highlight_and_paint_line(&mut self, line: &str, style: Style, state: State) {
         let lines = vec![(self.expand_tabs(line.graphemes(true)), state.clone())];
         let syntax_style_sections = Painter::get_syntax_style_sections_for_lines(
             &lines,
@@ -303,7 +303,7 @@ impl<'a> Painter<'a> {
         );
         Painter::paint_lines(
             syntax_style_sections,
-            vec![vec![(self.config.hunk_header_style, &lines[0].0)]], // TODO: compute style from state
+            vec![vec![(style, &lines[0].0)]], // TODO: compute style from state
             [state].iter(),
             &mut self.output_buffer,
             self.config,

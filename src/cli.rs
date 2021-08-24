@@ -419,6 +419,9 @@ pub struct Opt {
     /// (underline), 'ol' (overline), or the combination 'ul ol'.
     pub hunk_header_decoration_style: String,
 
+    #[structopt(long = "blame-palette")]
+    pub blame_palette: Option<String>,
+
     #[structopt(long = "default-language")]
     pub default_language: Option<String>,
 

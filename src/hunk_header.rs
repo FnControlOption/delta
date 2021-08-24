@@ -26,7 +26,7 @@ use crate::delta;
 use crate::draw;
 use crate::features;
 use crate::paint::Painter;
-use crate::style::DecorationStyle;
+use crate::style::{DecorationStyle, Style};
 
 pub fn write_hunk_header_raw(
     painter: &mut Painter,
@@ -71,7 +71,12 @@ pub fn write_hunk_header(
     let file_with_line_number = get_painted_file_with_line_number(line_numbers, plus_file, config);
 
     if !line.is_empty() || !file_with_line_number.is_empty() {
-        write_to_output_buffer(&file_with_line_number, line, painter);
+        write_to_output_buffer(
+            &file_with_line_number,
+            line,
+            config.hunk_header_style,
+            painter,
+        );
         draw_fn(
             painter.writer,
             &painter.output_buffer,
@@ -128,13 +133,19 @@ fn get_painted_file_with_line_number(
     }
 }
 
-fn write_to_output_buffer(file_with_line_number: &str, line: String, painter: &mut Painter) {
+fn write_to_output_buffer(
+    file_with_line_number: &str,
+    line: String,
+    style: Style,
+    painter: &mut Painter,
+) {
     if !file_with_line_number.is_empty() {
         let _ = write!(&mut painter.output_buffer, "{}: ", file_with_line_number);
     }
     if !line.is_empty() {
         painter.syntax_highlight_and_paint_line(
             &line,
+            style,
             delta::State::HunkHeader("".to_owned(), "".to_owned()),
         );
         painter.output_buffer.pop(); // trim newline
